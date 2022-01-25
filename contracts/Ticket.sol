@@ -2,53 +2,46 @@
 
 pragma solidity ^0.8.0;
 
+
 import "hardhat/console.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Ticket is ERC721Enumerable, Ownable {
+contract Ticket is ERC721, Ownable {
     using Strings for uint256;
+    using Counters for Counters.Counter;
 
-    string public baseURI = "";
-    string public baseExtension = ".json";
-    uint256 public cost = 0 ether;
+    Counters.Counter private tokenCounter;
+    string private baseURI;
     uint256 public maxSupply = 210;
     bool public paused = false;
-    mapping(address => bool) public whitelisted;
+    mapping(address => bool) public attendees;
+    mapping(uint256 => string) private _tokenURIs;
 
-    constructor( string memory _name, string memory _symbol ) ERC721(_name, _symbol) {
-        console.log("Deploying '%s' contract with symbol '%s'", _name, _symbol);
-				console.log("hdoihfdifdihifdhi");
-    }
-
-    // internal
-    function _baseURI() internal view virtual override returns (string memory) {
-        return baseURI;
-    }
-
-    function mint(address _to) public payable {
-        uint256 supply = totalSupply();
-        require(!paused);
-        require(supply + 1 <= maxSupply);
-
-        if (whitelisted[msg.sender] != true) {
-            require(msg.value >= cost);
-        }
-
-        _safeMint(_to, supply + 1);
-    }
-
-    function walletOfOwner(address _owner)
-        public
-        view
-        returns (uint256[] memory)
+    constructor(string memory _name, string memory _symbol)
+        ERC721(_name, _symbol)
     {
-        uint256 ownerTokenCount = balanceOf(_owner);
-        uint256[] memory tokenIds = new uint256[](ownerTokenCount);
-        for (uint256 i; i < ownerTokenCount; i++) {
-            tokenIds[i] = tokenOfOwnerByIndex(_owner, i);
-        }
-        return tokenIds;
+			_setBaseURI("");
+		}
+
+    function mint(address owner, string memory _tokenURI)
+        public
+        onlyOwner
+        returns (uint256)
+    {
+        tokenCounter.increment();
+
+        uint256 tokenId = tokenCounter.current();
+        require(!paused, "Ticket minting is paused");
+        require(tokenId <= maxSupply, "You can't mint beyound the max supply");
+        require(attendees[owner] != true, "User has already minted an NFT");
+
+        _safeMint(owner, tokenId);
+        _setTokenURI(tokenId, _tokenURI);
+				attendees[owner] = true;
+
+        return tokenId;
     }
 
     function tokenURI(uint256 tokenId)
@@ -63,51 +56,49 @@ contract Ticket is ERC721Enumerable, Ownable {
             "ERC721Metadata: URI query for nonexistent token"
         );
 
-        string memory currentBaseURI = _baseURI();
-        return
-            bytes(currentBaseURI).length > 0
-                ? string(
-                    abi.encodePacked(
-                        currentBaseURI,
-                        tokenId.toString(),
-                        baseExtension
-                    )
-                )
-                : "";
+        string memory _tokenURI = _tokenURIs[tokenId];
+        string memory base = _baseURI();
+
+        // If there is no base URI, return the token URI.
+        if (bytes(base).length == 0) {
+            return _tokenURI;
+        }
+        // If both are set, concatenate the baseURI and tokenURI (via abi.encodePacked).
+        if (bytes(_tokenURI).length > 0) {
+            return string(abi.encodePacked(base, _tokenURI));
+        }
+        // If there is a baseURI but no tokenURI, concatenate the tokenID to the baseURI.
+        return string(abi.encodePacked(base, tokenId.toString()));
     }
 
-    function setCost(uint256 _newCost) public onlyOwner {
-        cost = _newCost;
+    function _baseURI() internal view virtual override returns (string memory) {
+        return baseURI;
     }
 
-    function setBaseExtension(string memory _newBaseExtension)
-        public
-        onlyOwner
+    function _setTokenURI(uint256 tokenId, string memory _tokenURI)
+        internal
+        virtual
     {
-        baseExtension = _newBaseExtension;
+        require(
+            _exists(tokenId),
+            "ERC721Metadata: URI set of nonexistent token"
+        );
+        _tokenURIs[tokenId] = _tokenURI;
     }
 
     function setmaxSupply(uint256 _newmaxSupply) public onlyOwner {
         maxSupply = _newmaxSupply;
     }
 
-    function setBaseURI(string memory _newBaseURI) public onlyOwner {
+    function _setBaseURI(string memory _newBaseURI) public onlyOwner {
         baseURI = _newBaseURI;
+    }
+
+    function totalSupply() public view virtual returns (uint256) {
+        return tokenCounter.current();
     }
 
     function pause(bool _state) public onlyOwner {
         paused = _state;
-    }
-
-    function whitelistUser(address _user) public onlyOwner {
-        whitelisted[_user] = true;
-    }
-
-    function removeWhitelistUser(address _user) public onlyOwner {
-        whitelisted[_user] = false;
-    }
-
-    function withdraw() public payable onlyOwner {
-        require(payable(msg.sender).send(address(this).balance));
     }
 }
