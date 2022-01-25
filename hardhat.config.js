@@ -1,4 +1,7 @@
 require("@nomiclabs/hardhat-waffle");
+require("dotenv").config()
+
+const env = process.env
 
 task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
   const accounts = await hre.ethers.getSigners();
@@ -12,11 +15,15 @@ task("accounts", "Prints the list of accounts", async (taskArgs, hre) => {
  * @type import('hardhat/config').HardhatUserConfig
  */
 module.exports = {
-  defaultNetwork: "ganache",
+  defaultNetwork: "local",
   networks: {
-    ganache: {
+    local: {
       url: "http://127.0.0.1:8545",
       chainId: 1337,
+    },
+    rinkeby: {
+      url: env.RINKEBY_URL,
+      accounts: [env.PRIVATE_KEY],
     }
   },
   solidity: {
