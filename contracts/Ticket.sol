@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
@@ -12,9 +11,10 @@ contract Ticket is ERC721, Ownable {
     using Strings for uint256;
     using Counters for Counters.Counter;
 
-    Counters.Counter private tokenCounter;
+    Counters.Counter private tokenCount;
+    Counters.Counter private physTokenCount;
     string private baseURI;
-    uint256 public maxSupply = 210;
+    uint256 public maxPhysAtt = 210;
     bool public paused = false;
     mapping(address => bool) public attendees;
     mapping(uint256 => string) private _tokenURIs;
@@ -22,24 +22,25 @@ contract Ticket is ERC721, Ownable {
     constructor(string memory _name, string memory _symbol)
         ERC721(_name, _symbol)
     {
-			_setBaseURI("");
-		}
+        _setBaseURI("");
+    }
 
-    function mint(address owner, string memory _tokenURI)
-        public
-        onlyOwner
-        returns (uint256)
-    {
-        tokenCounter.increment();
-
-        uint256 tokenId = tokenCounter.current();
-        require(!paused, "Ticket minting is paused");
-        require(tokenId <= maxSupply, "You can't mint beyound the max supply");
+    function mint(
+        address owner,
+        string memory _tokenURI,
+        bool isPhysical
+    ) public onlyOwner returns (uint256) {
+        require(!paused, "Ticket minting is paused at the moment");
+        require(physTokenCount.current() < maxPhysAtt, "You can't mint beyound the max supply for physcical attendance");
         require(attendees[owner] != true, "User has already minted an NFT");
+
+        tokenCount.increment();
+        if (isPhysical) physTokenCount.increment();
+        uint256 tokenId = tokenCount.current();
 
         _safeMint(owner, tokenId);
         _setTokenURI(tokenId, _tokenURI);
-				attendees[owner] = true;
+        attendees[owner] = true;
 
         return tokenId;
     }
@@ -55,7 +56,6 @@ contract Ticket is ERC721, Ownable {
             _exists(tokenId),
             "ERC721Metadata: URI query for nonexistent token"
         );
-
         string memory _tokenURI = _tokenURIs[tokenId];
         string memory base = _baseURI();
 
@@ -86,8 +86,8 @@ contract Ticket is ERC721, Ownable {
         _tokenURIs[tokenId] = _tokenURI;
     }
 
-    function setmaxSupply(uint256 _newmaxSupply) public onlyOwner {
-        maxSupply = _newmaxSupply;
+    function setMaxPhysAtt(uint256 _newMaxPhysAtt) public onlyOwner {
+        maxPhysAtt = _newMaxPhysAtt;
     }
 
     function _setBaseURI(string memory _newBaseURI) public onlyOwner {
@@ -95,7 +95,7 @@ contract Ticket is ERC721, Ownable {
     }
 
     function totalSupply() public view virtual returns (uint256) {
-        return tokenCounter.current();
+        return tokenCount.current();
     }
 
     function pause(bool _state) public onlyOwner {
